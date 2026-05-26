@@ -31,7 +31,7 @@ The shipped experience is:
 ## Project Structure
 
 ```text
-agentic-rag-assistant/
+Agentic-RAG/
 ├── app.py                 # Main Streamlit chat app
 ├── api.py                 # FastAPI backend
 ├── pre_app.py             # Earlier prototype version
