@@ -35,7 +35,6 @@ The shipped experience is:
 Agentic-RAG/
 ├── app.py                 # Main Streamlit chat app
 ├── api.py                 # FastAPI backend
-├── pre_app.py             # Earlier prototype version
 ├── requirements.txt
 ├── .env.example
 ├── README.md
@@ -195,4 +194,4 @@ The primary usage path is the Streamlit chat app backed by FastAPI.
 
 - Reprocess documents after changing the embedding model or restarting the backend.
 - OCR is only used for PDF pages with little or no embedded text.
-- `pre_app.py` is kept as an earlier prototype and is not the main entrypoint.
+
