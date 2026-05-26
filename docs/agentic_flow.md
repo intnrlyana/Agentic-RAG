@@ -64,6 +64,7 @@ Reranking + Evidence Selection
 - The current final system supports:
   - `.pdf`
   - `.docx`
+- For scanned PDF pages with little or no embedded text, the loader can fall back to OCR.
 - Extracted content is normalized into page-like records so the downstream pipeline can treat sources consistently.
 
 ### 2. Preprocessing

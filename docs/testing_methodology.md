@@ -8,7 +8,7 @@ The goal is not to claim benchmark-level testing. The goal is to make evaluation
 
 - easy to explain
 - tied to source documents
-- visible during a demo
+- easy to inspect
 - grounded in citations and retrieved evidence
 
 ## What Is Being Evaluated
@@ -41,7 +41,7 @@ These scenarios cover:
 - multi-topic summarization
 - unsupported-question fallback
 
-## What Review Looks For
+## What To Check
 
 ### 1. Grounded Answers
 
@@ -66,11 +66,11 @@ These scenarios cover:
 - If the answer is not supported by the documents, did the system avoid hallucinating?
 - Did the fallback behavior remain conservative and document-grounded?
 
-### 5. Usability In Demo
+### 5. Practical Usability
 
 - Can the answer path be followed quickly?
 - Are the supporting details visible enough to inspect?
-- Is latency acceptable for a technical-task demo?
+- Is latency acceptable for normal local use?
 
 ## Manual Review Checklist
 
@@ -82,9 +82,9 @@ These scenarios cover:
 
 ## Evaluation Notes
 
-1. The same live pipeline is used for both demo interaction and evaluation-style checks.
+1. The same live pipeline is used for both normal interaction and evaluation-style checks.
 2. The emphasis is on document-grounded behavior, not black-box scoring.
-3. Reviewers can inspect retrieved evidence, citations, and answer details directly.
+3. A reader can inspect retrieved evidence, citations, and answer details directly.
 4. This makes the system easier to defend technically because the evaluation is tied to visible artifacts.
 
 ## Scope Note
@@ -92,7 +92,7 @@ These scenarios cover:
 This evaluation approach is intentionally lightweight. It is suitable for:
 
 - a small engineering prototype
-- a walkthrough or engineering review
+- a technical walkthrough
 - a reader who needs quick evidence that the system is grounded and inspectable
 
 It is not intended to replace large-scale benchmark testing or full production QA.

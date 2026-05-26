@@ -107,10 +107,10 @@ def build_basic_rag_prompt(
         )
 
     evidence_guidance = """If the primary evidence directly answers the question, answer directly and confidently.
-Do not add "not explicitly stated" or extra caution when the answer is already stated in the evidence."""
+Do not add extra caution when the answer is already stated in the evidence."""
     if evidence_mode != "explicit":
         evidence_guidance = """If the primary evidence does not directly answer the question but the retrieved text clearly supports a careful interpretation,
-you may say the exact wording is not explicitly stated and then give a conservative interpretation grounded in the text."""
+answer naturally from the evidence first and add only a brief qualification if it is truly needed."""
 
     primary_evidence_block = ""
     if primary_evidence and primary_evidence.strip():
@@ -122,15 +122,16 @@ you may say the exact wording is not explicitly stated and then give a conservat
     return f"""You are a document-grounded assistant.
 Use only the provided context to answer the user's question.
 Do not use outside knowledge.
+Answer in English.
 
 {evidence_guidance}
 
-If the exact wording from the user is not explicitly mentioned but the policy or text clearly implies an answer,
-you may give a conservative interpretation grounded in the context.
-When doing that:
-- say clearly that the exact item or wording is not explicitly stated, if true
-- base the interpretation only on the retrieved text
-- use cautious wording such as "based on the policy", "the document suggests", or "would depend on"
+If the user's wording does not exactly match the document wording but the policy or text clearly answers the question in substance,
+give a concise grounded paraphrase.
+When some qualification is needed:
+- keep it brief and natural
+- base it only on the retrieved text
+- avoid repetitive phrases such as "the exact wording is not explicitly stated" unless that detail is essential
 - do not invent extra rules, permissions, exceptions, or facts
 
 Only use the fallback answer if the retrieved context is genuinely too weak to support either:
@@ -138,7 +139,7 @@ Only use the fallback answer if the retrieved context is genuinely too weak to s
 2. a careful interpretation from the text.
 
 Fallback answer:
-I could not find this information in the uploaded documents.
+{FALLBACK_ANSWER}
 
 Keep the answer concise, factual, and grounded.
 If the retrieval interpretation is more specific than the original wording, use it to understand the user's intent.
@@ -326,14 +327,16 @@ def build_interpretive_rewrite_prompt(
     evidence_block = primary_evidence_payload.get("text", "").strip()
     return f"""You are revising a document-grounded answer.
 Do not use outside knowledge.
+Answer in English.
 
 The current answer is too definite for the available evidence.
 Rewrite it so that:
 - it does not use an unqualified yes/no
 - it does not claim permission or prohibition unless explicitly stated in the evidence
-- if the exact item is not explicitly mentioned, say that briefly
+- if a qualification is needed, keep it brief and natural
 - it uses cautious conditional wording such as "would depend on" or "the document only states"
 - it stays concise and natural
+- it avoids repetitive stock phrases such as "the exact wording is not explicitly stated" unless absolutely necessary
 - output only the final answer text
 - do not include any preface like "Here's a revised answer"
 - do not include notes, explanations, bullet points, or commentary about your rewrite
@@ -387,6 +390,7 @@ Rules:
 - Return only 2 to 4 short semantic terms or phrases that help retrieval.
 - Preserve the user's core topic and important concrete terms.
 - You may add closely related topic terms if they improve retrieval.
+- Keep the semantic terms in English.
 - Do not add assumptions about gender, age, role, department, location, or audience unless explicitly stated.
 - Do not invent facts or assume the answer.
 - Return JSON only.
@@ -416,6 +420,7 @@ Rules:
 - Do not add assumptions not present in the question.
 - Do not expand the scope beyond what the user asked.
 - Keep sub-queries short and retrieval-friendly.
+- Keep sub-queries in English.
 - Return JSON only.
 
 Output schema:
@@ -554,13 +559,14 @@ def build_grounded_interpretation_prompt(
 
     return f"""You are a document-grounded policy assistant.
 Use only the provided context.
+Answer in English.
 
 If the document explicitly answers the question, answer directly.
-If the exact item in the user's wording is not explicitly mentioned, say that clearly first.
-Then give only a conservative interpretation that follows directly from the stated policy.
+If the wording differs but the document still answers the question in substance, give a concise grounded paraphrase.
+Only add a short qualification when it is genuinely necessary.
 Do not invent permissions, exceptions, or requirements that are not in the context.
 If the context is insufficient, respond exactly with:
-I could not find this information in the uploaded documents.
+{FALLBACK_ANSWER}
 
 Keep the answer concise and factual.
 Stay on the same topic as the user's question.
@@ -591,6 +597,7 @@ def build_subanswer_combine_prompt(
     return f"""You are combining document-grounded sub-answers.
 Use only the sub-answers below.
 Do not add outside knowledge.
+Answer in English.
 Write one concise final answer to the original user question.
 Cover each sub-query that has supported information.
 If one sub-answer lacks evidence, omit unsupported details rather than inventing them.
@@ -771,13 +778,14 @@ def build_factual_topic_summary_prompt(
     return f"""You are a document-grounded assistant.
 Use only the provided evidence and context.
 Do not use outside knowledge.
+Answer in English.
 
 Summarize only rules or facts that are explicitly supported by the evidence.
 Do not say the topic is "not explicitly stated" if the evidence already contains direct policy details.
 Do not narrow the answer to only one subsection if multiple evidence lines are present.
 Write a concise factual summary in 2 to 4 sentences.
 If the evidence is truly insufficient, respond exactly with:
-I could not find this information in the uploaded documents.
+{FALLBACK_ANSWER}
 
 User question:
 {user_query.strip()}
@@ -799,6 +807,7 @@ def build_factual_topic_extraction_prompt(
     return f"""You are a document-grounded assistant.
 Use only the provided evidence and context.
 Do not use outside knowledge.
+Answer in English.
 
 Extract only explicit supported facts or rules relevant to the user question.
 Return 3 to 6 short bullet points.
@@ -807,7 +816,7 @@ Do not include introductory text.
 Do not include commentary such as "not explicitly stated" if direct policy details already exist.
 Do not infer beyond the text.
 If the evidence is truly insufficient, respond exactly with:
-I could not find this information in the uploaded documents.
+{FALLBACK_ANSWER}
 
 User question:
 {user_query.strip()}
@@ -832,6 +841,7 @@ def extract_topic_facts_with_ollama(
     top_p: float = 0.9,
 ) -> dict[str, Any]:
     """Extract explicit bullet facts for broad factual topic summaries."""
+    fallback_answer = FALLBACK_ANSWER
     context_chunks = select_summary_context_chunks(
         user_query,
         retrieved_chunks,
@@ -844,9 +854,9 @@ def extract_topic_facts_with_ollama(
     )
     citations = format_citations(context_chunks)
     if not context.strip():
-        response_payload = attach_citations_to_response(FALLBACK_ANSWER, [])
+        response_payload = attach_citations_to_response(fallback_answer, [])
         return {
-            "answer": FALLBACK_ANSWER,
+            "answer": fallback_answer,
             "facts": "",
             "fact_lines": [],
             "sources": [],
@@ -855,7 +865,7 @@ def extract_topic_facts_with_ollama(
             "context_used": context,
             "answer_strategy": "topic_fact_extraction_no_context",
             "primary_evidence": None,
-            "raw_generated_answer": FALLBACK_ANSWER,
+            "raw_generated_answer": fallback_answer,
         }
 
     evidence_payload = select_topic_evidence_lines(
@@ -877,8 +887,8 @@ def extract_topic_facts_with_ollama(
             "top_p": top_p,
         },
     )
-    raw_facts = (response_json.get("response") or "").strip() or FALLBACK_ANSWER
-    if raw_facts == FALLBACK_ANSWER:
+    raw_facts = (response_json.get("response") or "").strip() or fallback_answer
+    if raw_facts == fallback_answer:
         fact_lines: list[str] = []
     else:
         fact_lines = []
@@ -888,7 +898,7 @@ def extract_topic_facts_with_ollama(
                 continue
             stripped = re.sub(r"^[-*•]\s*", "", stripped)
             stripped = re.sub(r"^\d+\.\s*", "", stripped)
-            if not stripped or stripped.lower() == FALLBACK_ANSWER.lower():
+            if not stripped or stripped.lower() == fallback_answer.lower():
                 continue
             fact_lines.append(stripped)
         deduped_lines: list[str] = []
@@ -901,11 +911,11 @@ def extract_topic_facts_with_ollama(
             deduped_lines.append(line)
         fact_lines = deduped_lines[:6]
 
-    facts_text = "\n".join(f"- {line}" for line in fact_lines) if fact_lines else FALLBACK_ANSWER
+    facts_text = "\n".join(f"- {line}" for line in fact_lines) if fact_lines else fallback_answer
     response_payload = attach_citations_to_response(facts_text, citations)
     return {
         "answer": facts_text,
-        "facts": facts_text if facts_text != FALLBACK_ANSWER else "",
+        "facts": facts_text if facts_text != fallback_answer else "",
         "fact_lines": fact_lines,
         "sources": get_unique_sources(context_chunks) if citations else [],
         "citations": response_payload["citations"],
@@ -929,6 +939,7 @@ def summarize_topic_with_ollama(
     top_p: float = 0.9,
 ) -> dict[str, Any]:
     """Generate a factual topic summary from multiple explicit evidence lines."""
+    fallback_answer = FALLBACK_ANSWER
     context_chunks = select_summary_context_chunks(
         user_query,
         retrieved_chunks,
@@ -941,16 +952,16 @@ def summarize_topic_with_ollama(
     )
     citations = format_citations(context_chunks)
     if not context.strip():
-        response_payload = attach_citations_to_response(FALLBACK_ANSWER, [])
+        response_payload = attach_citations_to_response(fallback_answer, [])
         return {
-            "answer": FALLBACK_ANSWER,
+            "answer": fallback_answer,
             "sources": [],
             "citations": response_payload["citations"],
             "citations_text": response_payload["citations_text"],
             "context_used": context,
             "answer_strategy": "topic_summary_no_context",
             "primary_evidence": None,
-            "raw_generated_answer": FALLBACK_ANSWER,
+            "raw_generated_answer": fallback_answer,
         }
 
     evidence_payload = select_topic_evidence_lines(user_query, context_chunks)
@@ -968,7 +979,7 @@ def summarize_topic_with_ollama(
             "top_p": top_p,
         },
     )
-    answer = (response_json.get("response") or "").strip() or FALLBACK_ANSWER
+    answer = (response_json.get("response") or "").strip() or fallback_answer
     response_payload = attach_citations_to_response(answer, citations)
     return {
         "answer": response_payload["answer"],
@@ -994,6 +1005,7 @@ def generate_answer_with_ollama(
     top_p: float = 0.9,
 ) -> dict[str, Any]:
     """Generate a grounded answer from retrieved chunks using a local Ollama model."""
+    fallback_answer = FALLBACK_ANSWER
     answer_strategy = "top_rank_llm_generation"
     effective_max_context_chunks = min(max_context_chunks, 2)
     effective_max_chars_per_chunk = min(max_chars_per_chunk, 900)
@@ -1013,9 +1025,9 @@ def generate_answer_with_ollama(
     citations = format_citations(context_chunks)
 
     if not context.strip():
-        response_payload = attach_citations_to_response(FALLBACK_ANSWER, [])
+        response_payload = attach_citations_to_response(fallback_answer, [])
         return {
-            "answer": FALLBACK_ANSWER,
+            "answer": fallback_answer,
             "sources": [],
             "citations": response_payload["citations"],
             "citations_text": response_payload["citations_text"],
@@ -1040,7 +1052,7 @@ def generate_answer_with_ollama(
             "top_p": top_p,
         },
     )
-    raw_generated_answer = (response_json.get("response") or "").strip() or FALLBACK_ANSWER
+    raw_generated_answer = (response_json.get("response") or "").strip() or fallback_answer
     answer = raw_generated_answer
     if needs_interpretive_rewrite(user_query, answer, primary_evidence_payload):
         answer = rewrite_interpretive_answer_with_ollama(

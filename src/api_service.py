@@ -547,6 +547,7 @@ def _run_llamaindex_complex_answer(
     pipeline_started: float,
 ) -> dict[str, Any]:
     """Run a complex LlamaIndex workflow using sub-query retrieval and answer composition."""
+    fallback_answer = FALLBACK_ANSWER
     sub_answers: list[dict[str, Any]] = []
     combined_citations: list[dict[str, Any]] = []
     combined_chunks: list[dict[str, Any]] = []
@@ -591,7 +592,7 @@ def _run_llamaindex_complex_answer(
         )
 
         if not sub_chunks:
-            sub_answers.append({"query": sub_query, "answer": FALLBACK_ANSWER})
+            sub_answers.append({"query": sub_query, "answer": fallback_answer})
             continue
 
         sub_answer_started = time.perf_counter()
@@ -651,7 +652,7 @@ def _run_llamaindex_complex_answer(
     )
     combine_time_seconds = time.perf_counter() - combine_started
     answer_generation_time_seconds += combine_time_seconds
-    final_answer = (combine_response.get("response") or "").strip() or FALLBACK_ANSWER
+    final_answer = (combine_response.get("response") or "").strip() or fallback_answer
 
     deduped_citations: list[dict[str, Any]] = []
     seen_citations: set[tuple[str, int, str]] = set()
@@ -695,7 +696,7 @@ def _run_llamaindex_complex_answer(
         },
         "retrieved_chunks": combined_chunks,
         "final_answer": response_payload["answer"],
-        "fallback_triggered": response_payload["answer"] == FALLBACK_ANSWER,
+        "fallback_triggered": response_payload["answer"] == fallback_answer,
         "sources": get_unique_sources(combined_chunks) if deduped_citations else [],
         "citations": response_payload["citations"],
         "citations_text": response_payload["citations_text"],

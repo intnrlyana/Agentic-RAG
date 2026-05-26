@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from functools import lru_cache
+from io import BytesIO
 import logging
 from pathlib import Path
 from typing import Any
@@ -9,11 +11,24 @@ from typing import Any
 from docx import Document
 from pypdf import PdfReader
 
+try:
+    import pypdfium2 as pdfium
+except ImportError:  # pragma: no cover - optional dependency
+    pdfium = None
+
+try:
+    from rapidocr_onnxruntime import RapidOCR
+except ImportError:  # pragma: no cover - optional dependency
+    RapidOCR = None
+
 
 logger = logging.getLogger(__name__)
+request_logger = logging.getLogger("uvicorn.error")
 
 
 PageRecord = dict[str, Any]
+_OCR_MIN_TEXT_LENGTH = 24
+_OCR_RENDER_SCALE = 2.0
 
 
 def extract_text_from_pdf_file(file: Any, source_type: str = "uploaded") -> list[PageRecord]:
@@ -23,12 +38,12 @@ def extract_text_from_pdf_file(file: Any, source_type: str = "uploaded") -> list
     try:
         if hasattr(file, "seek"):
             file.seek(0)
-        reader = PdfReader(file)
+        pdf_bytes = file.read()
     except Exception as exc:
         logger.warning("Failed to read uploaded PDF '%s': %s", source_name, exc)
         return []
 
-    return _extract_pages_from_reader(reader, source_name=source_name, source_type=source_type)
+    return _extract_pages_from_pdf_bytes(pdf_bytes, source_name=source_name, source_type=source_type)
 
 
 def extract_text_from_pdf_path(pdf_path: str | Path, source_type: str = "local") -> list[PageRecord]:
@@ -36,13 +51,12 @@ def extract_text_from_pdf_path(pdf_path: str | Path, source_type: str = "local")
     path = Path(pdf_path)
 
     try:
-        with path.open("rb") as pdf_file:
-            reader = PdfReader(pdf_file)
-            return _extract_pages_from_reader(
-                reader,
-                source_name=path.name,
-                source_type=source_type,
-            )
+        pdf_bytes = path.read_bytes()
+        return _extract_pages_from_pdf_bytes(
+            pdf_bytes,
+            source_name=path.name,
+            source_type=source_type,
+        )
     except Exception as exc:
         logger.warning("Failed to read local PDF '%s': %s", path, exc)
         return []
@@ -114,6 +128,7 @@ def summarize_extraction(pages: list[PageRecord]) -> dict[str, Any]:
     """Summarize extracted page records for backend tracking and UI display."""
     source_filenames = sorted({page["source"] for page in pages})
     empty_pages = sum(1 for page in pages if not page.get("text", "").strip())
+    ocr_pages = sum(1 for page in pages if page.get("extraction_method") == "ocr")
 
     pages_per_source: dict[str, int] = {}
     for page in pages:
@@ -126,10 +141,33 @@ def summarize_extraction(pages: list[PageRecord]) -> dict[str, Any]:
         "document_count": len(source_filenames),
         "total_pages_extracted": len(pages),
         "empty_or_skipped_pages": empty_pages,
+        "ocr_pages": ocr_pages,
         "source_filenames": source_filenames,
         "pages_per_source": pages_per_source,
         "source_types": source_types,
     }
+
+
+def _extract_pages_from_pdf_bytes(
+    pdf_bytes: bytes,
+    *,
+    source_name: str,
+    source_type: str,
+) -> list[PageRecord]:
+    """Extract PDF pages and use OCR only for pages with little or no embedded text."""
+    try:
+        reader = PdfReader(BytesIO(pdf_bytes))
+    except Exception as exc:
+        logger.warning("Failed to parse PDF '%s': %s", source_name, exc)
+        return []
+
+    ocr_document = _load_pdfium_document(pdf_bytes, source_name=source_name)
+    return _extract_pages_from_reader(
+        reader,
+        source_name=source_name,
+        source_type=source_type,
+        ocr_document=ocr_document,
+    )
 
 
 def _extract_pages_from_reader(
@@ -137,6 +175,7 @@ def _extract_pages_from_reader(
     *,
     source_name: str,
     source_type: str,
+    ocr_document: Any | None = None,
 ) -> list[PageRecord]:
     """Normalize page extraction and keep empty pages as explicit records."""
     extracted_pages: list[PageRecord] = []
@@ -153,12 +192,32 @@ def _extract_pages_from_reader(
             )
             extracted_text = ""
 
+        extraction_method = "embedded_text"
+        normalized_text = extracted_text.strip()
+        if _should_use_ocr(normalized_text):
+            ocr_text = _extract_text_with_ocr(
+                ocr_document,
+                page_index=page_index,
+                source_name=source_name,
+            )
+            if ocr_text:
+                normalized_text = ocr_text
+                extraction_method = "ocr"
+
+        request_logger.info(
+            "Extraction method for '%s' page %s: %s",
+            source_name,
+            page_index,
+            extraction_method,
+        )
+
         extracted_pages.append(
             {
                 "source": source_name,
                 "page_number": page_index,
-                "text": extracted_text.strip(),
+                "text": normalized_text,
                 "source_type": source_type,
+                "extraction_method": extraction_method,
             }
         )
 
@@ -189,3 +248,58 @@ def _extract_pages_from_docx_document(
         logger.warning("DOCX '%s' contains no readable paragraphs.", source_name)
 
     return [page_record]
+
+
+def _should_use_ocr(text: str) -> bool:
+    """Trigger OCR only for pages with effectively no embedded text."""
+    compact = " ".join(text.split())
+    return len(compact) < _OCR_MIN_TEXT_LENGTH
+
+
+def _load_pdfium_document(pdf_bytes: bytes, *, source_name: str) -> Any | None:
+    """Load a PDFium document for OCR rendering when the optional dependency is available."""
+    if pdfium is None:
+        return None
+    try:
+        return pdfium.PdfDocument(pdf_bytes)
+    except Exception as exc:
+        logger.warning("Failed to prepare OCR renderer for '%s': %s", source_name, exc)
+        return None
+
+
+@lru_cache(maxsize=1)
+def _get_ocr_engine() -> Any | None:
+    """Build the OCR engine once when the optional dependency is available."""
+    if RapidOCR is None:
+        return None
+    try:
+        return RapidOCR()
+    except Exception as exc:
+        logger.warning("Failed to initialize OCR engine: %s", exc)
+        return None
+
+
+def _extract_text_with_ocr(ocr_document: Any | None, *, page_index: int, source_name: str) -> str:
+    """Render a PDF page and run OCR as a fallback when embedded text is missing."""
+    if ocr_document is None:
+        return ""
+
+    ocr_engine = _get_ocr_engine()
+    if ocr_engine is None:
+        return ""
+
+    try:
+        page = ocr_document[page_index - 1]
+        bitmap = page.render(scale=_OCR_RENDER_SCALE)
+        image = bitmap.to_pil()
+        result, _ = ocr_engine(image)
+        lines = [item[1] for item in result or [] if item and len(item) > 1 and item[1]]
+        return "\n".join(lines).strip()
+    except Exception as exc:
+        logger.warning(
+            "OCR failed for page %s in '%s': %s",
+            page_index,
+            source_name,
+            exc,
+        )
+        return ""

@@ -12,6 +12,7 @@ The shipped experience is:
 
 - Upload one or more PDF or DOCX documents
 - Extract and preprocess page text
+- Apply OCR fallback for scanned PDF pages with little or no embedded text
 - Chunk content for retrieval
 - Build embeddings and a FAISS-based index
 - Retrieve relevant evidence for each question
@@ -65,8 +66,9 @@ Agentic-RAG/
 
 ## Main Features
 
-- Clean chat-style UI for the final demo
+- Clean chat-style UI
 - Multi-document upload support for PDF and DOCX
+- OCR fallback for scanned PDFs
 - Per-file enable/disable selection before processing
 - Retrieval-backed answers with citations
 - Sample starter questions for quick testing
@@ -95,7 +97,6 @@ Recommended Groq configuration:
 LLM_PROVIDER=groq
 GROQ_API_KEY=your_groq_api_key_here
 GROQ_MODEL_NAME=llama-3.3-70b-versatile
-RAG_BACKEND=llamaindex
 ```
 
 Optional Ollama configuration:
@@ -104,7 +105,6 @@ Optional Ollama configuration:
 LLM_PROVIDER=ollama
 OLLAMA_BASE_URL=http://localhost:11434
 OLLAMA_MODEL_NAME=llama3.2:3b
-RAG_BACKEND=llamaindex
 ```
 
 Notes:
@@ -174,11 +174,11 @@ Main backend endpoints:
 - `POST /retrieve`
 - `POST /ask`
 
-## Notes for Reviewers
+## Architecture Notes
 
 This project is structured as a small service-oriented RAG application:
 
-- `app.py` is the user-facing demo layer
+- `app.py` is the user-facing application layer
 - `api.py` exposes document processing and question-answering endpoints
 - `src/` contains the retrieval and answer pipeline
 
@@ -187,14 +187,12 @@ The primary usage path is the Streamlit chat app backed by FastAPI.
 ## Known Limitations
 
 - Retrieval quality depends on document text extraction quality.
-- Scanned PDFs without extractable text may perform poorly unless OCR is added.
+- OCR improves scanned PDF coverage, but low-quality scans can still introduce noisy text.
 - The backend currently keeps processed artifacts in memory for the running session.
 - Large documents or many uploaded files can increase processing and response time.
 
-## Usage Notes
+## Notes
 
-The repository is easiest to evaluate through:
-
-- the Streamlit application
-- the FastAPI backend
-- the included documentation
+- Reprocess documents after changing the embedding model or restarting the backend.
+- OCR is only used for PDF pages with little or no embedded text.
+- `pre_app.py` is kept as an earlier prototype and is not the main entrypoint.
