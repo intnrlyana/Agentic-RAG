@@ -1,230 +1,200 @@
 # Agentic RAG Document Assistant
 
-Phase 3 scaffold for an interview demo project built with Python and Streamlit.
+A document question-answering system built for an AI engineering technical task. The app lets a user upload PDF documents, process them into a retrieval pipeline, and ask grounded questions through a chat interface with page-level citations.
 
-## Goal
+The shipped experience is:
 
-This phase sets up:
+- `app.py` as the main Streamlit frontend
+- `api.py` as the FastAPI backend
+- `src/` for document processing, retrieval, and answer generation
 
-- A clean Python project structure
-- A Streamlit interface for PDF extraction
-- Local `data/` folder PDF support
-- Uploaded PDF support
-- Page-level extraction metadata
-- Light, meaning-preserving preprocessing for extracted pages
-- Environment variable and dependency scaffolding
+## What It Does
 
-This phase does not implement chunking, embeddings, FAISS indexing, retrieval, or answer generation yet.
+- Upload one or more PDF documents
+- Extract and preprocess page text
+- Chunk content for retrieval
+- Build embeddings and a FAISS-based index
+- Retrieve relevant evidence for each question
+- Generate grounded answers with citations
+- Show answer details such as retrieved chunks and pipeline metadata
+
+## Tech Stack
+
+- Python
+- Streamlit
+- FastAPI
+- SentenceTransformers
+- FAISS
+- LlamaIndex-based backend flow
+- Groq or Ollama for answer generation
 
 ## Project Structure
 
 ```text
 agentic-rag-assistant/
-├── app.py
+├── app.py                 # Main Streamlit chat app
+├── api.py                 # FastAPI backend
+├── pre_app.py             # Earlier prototype version
 ├── requirements.txt
 ├── .env.example
 ├── README.md
-├── src/
-│   ├── __init__.py
-│   ├── document_loader.py
-│   ├── preprocessing.py
-│   ├── chunking.py
-│   ├── vector_store.py
-│   ├── agentic_rag.py
-│   └── utils.py
-└── data/
+├── data/                  # Sample PDFs or local test documents
+├── docs/
+└── src/
+    ├── agentic_rag.py
+    ├── api_client.py
+    ├── api_service.py
+    ├── chunking.py
+    ├── citations.py
+    ├── document_loader.py
+    ├── evidence_selection.py
+    ├── llamaindex_backend.py
+    ├── preprocessing.py
+    ├── query_understanding.py
+    ├── utils.py
+    └── vector_store.py
 ```
 
-## Setup
+## System Flow
 
-### 1. Open in VS Code
+1. Upload PDFs in the Streamlit app.
+2. Streamlit sends the files to the FastAPI backend.
+3. The backend extracts text, preprocesses pages, chunks content, and builds retrieval artifacts.
+4. When a user asks a question, the backend retrieves relevant chunks and generates a grounded answer.
+5. The frontend displays the answer together with citations and supporting details.
 
-Open the `agentic-rag-assistant` folder as the workspace root.
+## Main Features
 
-### 2. Create a virtual environment
+- Clean chat-style UI for the final demo
+- Multi-PDF upload support
+- Per-file enable/disable selection before processing
+- Retrieval-backed answers with citations
+- Sample starter questions for quick testing
+- Backend health check and LLM/provider status check
+- Configurable chunking and embedding settings in the processing request
 
-macOS/Linux:
+## Requirements
 
-```bash
-python3 -m venv .venv
-source .venv/bin/activate
-```
+- Python 3.10+
+- `pip`
+- A configured LLM provider:
+  - `Groq` recommended for simpler setup
+  - `Ollama` supported for local inference
 
-Windows PowerShell:
+## Environment Setup
 
-```powershell
-python -m venv .venv
-.venv\Scripts\Activate.ps1
-```
-
-### 3. Install dependencies
-
-```bash
-pip install --upgrade pip
-pip install -r requirements.txt
-```
-
-### 4. Configure environment variables
-
-Copy `.env.example` to `.env` and add API keys when needed.
-
-macOS/Linux:
+Copy `.env.example` to `.env`:
 
 ```bash
 cp .env.example .env
 ```
 
-Windows PowerShell:
+Recommended Groq configuration:
 
-```powershell
-Copy-Item .env.example .env
+```env
+LLM_PROVIDER=groq
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL_NAME=llama-3.3-70b-versatile
+RAG_BACKEND=llamaindex
 ```
 
-### 5. Run the Streamlit app
+Optional Ollama configuration:
+
+```env
+LLM_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_MODEL_NAME=llama3.2:3b
+RAG_BACKEND=llamaindex
+```
+
+Notes:
+
+- `app.py` reads `BACKEND_URL` if you want to override the default backend address.
+- If `BACKEND_URL` is not set, the frontend uses `http://127.0.0.1:8000`.
+
+## Local Setup
+
+Create a virtual environment and install dependencies:
 
 ```bash
-streamlit run app.py
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install -r requirements.txt
 ```
 
-## Phase 3 Usage
+## Run Locally
 
-### Option 1: Load PDFs from the local `data/` folder
-
-Place any `.pdf` files inside:
-
-```text
-agentic-rag-assistant/data/
-```
-
-Example:
-
-```text
-data/
-├── Employee-Handbook.pdf
-├── Employee-Handbook-Sample-Malaysia-HR-Forum-v3.pdf
-└── sample_policy_and_procedures_manual.pdf
-```
-
-Then run:
+Start the FastAPI backend:
 
 ```bash
-streamlit run app.py
+uvicorn api:app --reload
 ```
 
-In the app sidebar:
+The backend will be available at:
 
-- Choose `Load from data/ folder`
-- Click `Extract PDF Text`
+- `http://127.0.0.1:8000`
+- Swagger docs: `http://127.0.0.1:8000/docs`
 
-### Option 2: Upload PDFs manually in Streamlit
+In a second terminal, start the Streamlit app:
 
-In the app sidebar:
-
-- Choose `Upload PDFs`
-- Select one or more PDF files
-- Click `Extract PDF Text`
-
-## Why Preprocessing Matters for RAG
-
-PDF extraction usually produces noisy text:
-
-- irregular spacing
-- repeated blank lines
-- isolated page-number artifacts
-- pages with too little text to be useful
-
-For RAG, preprocessing should be light. We want cleaner retrieval input without changing the meaning of the source. That is why this project:
-
-- keeps punctuation
-- keeps casing
-- keeps headings and sentence structure
-- does not remove stopwords
-- does not apply stemming or lemmatization
-
-This preserves factual wording so later retrieval and answer generation remain faithful to the documents.
-
-## What Phase 3 Displays
-
-After extraction and preprocessing, the app shows:
-
-- Number of PDFs selected
-- Number of PDFs with extracted pages
-- Total pages extracted
-- Number of empty pages
-- Source filename list
-- Preprocessing summary
-- Original vs cleaned text preview
-- Expandable retained page output
-- Expandable skipped page output
-
-Each extracted page is normalized into a dictionary like this:
-
-```python
-{
-    "source": "Employee-Handbook.pdf",
-    "page_number": 1,
-    "text": "extracted page text here",
-    "source_type": "local"
-}
+```bash
+python -m streamlit run app.py
 ```
 
-Each processed page keeps the original metadata and adds preprocessing metadata:
+The frontend will usually open at:
 
-```python
-{
-    "source": "Employee-Handbook.pdf",
-    "page_number": 1,
-    "source_type": "local",
-    "text": "cleaned page text here",
-    "original_text_length": 1540,
-    "cleaned_text_length": 1472,
-    "was_skipped": False,
-    "skip_reason": None
-}
-```
+- `http://localhost:8501`
 
-## Backend Module
+## How to Use
 
-The PDF loading logic is kept modular in `src/document_loader.py` with these functions:
+1. Open the Streamlit app.
+2. Upload one or more PDF files in the sidebar.
+3. Optionally disable any uploaded file you do not want to include.
+4. Click `Process documents`.
+5. Ask questions in the chat input.
+6. Review the answer, citations, and detail panel.
 
-- `extract_text_from_pdf_file(file, source_type="uploaded")`
-- `extract_text_from_pdf_path(pdf_path, source_type="local")`
-- `load_pdfs_from_data_folder(data_dir="data")`
-- `summarize_extraction(pages)`
+Example questions:
 
-The loader is designed to:
+- `How many public holidays do employees get?`
+- `Can I wear jeans to work?`
+- `What is the resignation notice period?`
+- `Summarize the leave and resignation rules.`
 
-- Extract text page by page
-- Keep empty pages as records with empty text
-- Skip bad PDFs without crashing the app
-- Support uploaded and local document sources
+## API Endpoints
 
-The preprocessing logic is isolated in `src/preprocessing.py` with these functions:
+Main backend endpoints:
 
-- `clean_text(text)`
-- `preprocess_pages(pages, min_text_length=30)`
-- `summarize_preprocessing(processed_pages)`
+- `GET /health`
+- `GET /ollama/status`
+- `GET /documents/status`
+- `POST /documents/process/local`
+- `POST /documents/process/upload`
+- `POST /retrieve`
+- `POST /ask`
 
-The preprocessing layer is designed to:
+## Notes for Reviewers
 
-- normalize whitespace conservatively
-- remove repeated blank lines
-- drop obvious standalone page-number artifacts where safe
-- keep factual wording intact
-- mark empty or too-short pages as skipped instead of silently deleting them
+This project is structured as a small service-oriented RAG application:
 
-## Testing Local PDF Extraction and Preprocessing
+- `app.py` is the user-facing demo layer
+- `api.py` exposes document processing and question-answering endpoints
+- `src/` contains the retrieval and answer pipeline
 
-1. Put one or more `.pdf` files in `data/`
-2. Start the app with `python -m streamlit run app.py`
-3. Select `Load from data/ folder`
-4. Click `Extract PDF Text`
-5. Review the extraction summary, preprocessing summary, retained pages, and skipped pages in the browser
+The primary submission path is the Streamlit chat app backed by FastAPI.
 
-## Next Phases
+## Known Limitations
 
-- Text chunking
-- Embeddings with `sentence-transformers`
-- FAISS vector store integration
-- Agentic orchestration for retrieval and answer synthesis
-- OpenAI or Gemini API integration
+- Retrieval quality depends on PDF text extraction quality.
+- Scanned PDFs without extractable text may perform poorly unless OCR is added.
+- The backend currently keeps processed artifacts in memory for the running session.
+- Large documents or many uploaded PDFs can increase processing and response time.
+
+## Submission Tip
+
+If you are pushing this for interview review, the easiest evaluation package is:
+
+- this GitHub repository
+- a short demo video or screenshots
+- an optional hosted version if it is stable
