@@ -282,7 +282,7 @@ def _process_documents(
     model_name: str,
 ) -> None:
     if not uploaded_files:
-        st.warning("Enable at least one PDF before processing.")
+        st.warning("Enable at least one document before processing.")
         return
 
     try:
@@ -354,8 +354,8 @@ def _render_upload_panel(
 ) -> None:
     process = st.session_state.processing_response or {}
     uploaded_files = st.file_uploader(
-        "Upload PDF documents",
-        type=["pdf"],
+        "Upload PDF or DOCX documents",
+        type=["pdf", "docx"],
         accept_multiple_files=True,
         key="sidebar_uploaded_files",
     )

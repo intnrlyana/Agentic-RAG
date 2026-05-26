@@ -1,88 +1,132 @@
 # Agentic RAG Flow
 
+## Current Shipped Flow
+
+The final system is built as:
+
+- `app.py` as the main Streamlit frontend
+- `api.py` as the FastAPI backend
+- `src/` as the shared retrieval and answering pipeline
+
+The user-facing flow is:
+
+1. The user uploads one or more `PDF` or `DOCX` files in Streamlit.
+2. Streamlit sends the files to the FastAPI backend.
+3. The backend extracts text, preprocesses it, chunks it, and builds retrieval artifacts.
+4. The user asks a question in the chat UI.
+5. The backend retrieves relevant evidence and generates a grounded answer.
+6. The frontend shows the answer, citations, and supporting details.
+
 ## Workflow Diagram
 
 ```text
-User Query
+Upload PDF/DOCX
   |
   v
-Query Rewriter
+FastAPI Processing
+  |
+  +--> Text Extraction
+  |
+  +--> Preprocessing
+  |
+  +--> Chunking
+  |
+  +--> Embedding + Retrieval Index Build
   |
   v
-FAISS Retrieval
+Question From User
   |
   v
-Retrieval Evaluation
+Query Planning / Rewriting
   |
-  +--> Relevant enough? ---- yes ----> Final Context Selection
-  |                                      |
-  |                                      v
-  |                                Ollama Grounded Answer
-  |                                      |
-  |                                      v
-  |                                 Final Answer
+  v
+LlamaIndex Retrieval
   |
-  +--> no ----> Retry With Broader Query ----> FAISS Retrieval
-                       |
-                       v
-                 Still weak?
-                       |
-                       v
-                    Fallback
+  v
+Reranking + Evidence Selection
+  |
+  +--> Evidence strong enough? ---- yes ----> Grounded Answer Generation
+  |                                              |
+  |                                              v
+  |                                        Citations Attached
+  |                                              |
+  |                                              v
+  |                                         Final Answer
+  |
+  +--> no ----> Retry / fallback path
 ```
 
-## Step By Step
+## Main Pipeline Stages
 
-1. The user asks a question.
-2. The system rewrites the question into a shorter retrieval-focused phrase.
-3. FAISS retrieves the top matching chunks.
-4. The system evaluates whether the retrieval looks strong enough.
-5. If retrieval is weak, the query is broadened once and retrieval runs again.
-6. If retrieval becomes strong enough, the retrieved chunks are sent to Ollama.
-7. Ollama answers using only the provided context.
-8. Citations are generated from the retrieved chunks used as context.
-9. If retrieval is still weak, the system returns the fallback response.
+### 1. Document Ingestion
 
-## Successful Retrieval Example
+- Uploaded documents are accepted through the Streamlit UI.
+- The current final system supports:
+  - `.pdf`
+  - `.docx`
+- Extracted content is normalized into page-like records so the downstream pipeline can treat sources consistently.
 
-User query:
+### 2. Preprocessing
+
+- Extracted text is lightly cleaned.
+- The goal is to preserve meaning while reducing noise from raw document extraction.
+- Empty or very low-value content is tracked so the processing summary remains visible.
+
+### 3. Chunking
+
+- Processed content is split into retrieval-friendly chunks.
+- Metadata such as source name, page number, and chunk identifiers are preserved.
+- This metadata is later used for citations and answer inspection.
+
+### 4. Retrieval
+
+- The current backend path is LlamaIndex-based.
+- Retrieved chunks are enriched with overlap signals and reranked before answer generation.
+- The system still keeps explicit chunk metadata and retrieval details for explainability.
+
+### 5. Agentic Answering
+
+- The system can take a lighter path for simple questions or a more structured path for broader multi-part questions.
+- It evaluates whether retrieval quality looks strong enough.
+- If retrieval is weak, the system can retry through a broader or adjusted path before falling back.
+
+### 6. Grounding and Citations
+
+- Answers are generated from retrieved evidence rather than unrestricted free-form generation.
+- Citations are attached using source and page metadata from the retrieved chunks.
+- The UI also exposes retrieved chunk snippets and performance details for inspection.
+
+## Example Successful Case
+
+Question:
 
 ```text
-Can I bring forward leave?
+What is the resignation notice period?
 ```
 
-Rewritten query:
+Typical behavior:
+
+- retrieval finds the relevant resignation-policy chunks
+- the answer is generated from those chunks
+- citations point back to the supporting document pages
+
+## Example Fallback Case
+
+Question:
 
 ```text
-unused annual leave carry forward policy
+What is the moon allowance policy?
 ```
 
-Outcome:
+Typical behavior:
 
-- leave-policy chunks are retrieved
-- scores are high enough
-- the grounded answer is generated from the retrieved context
+- retrieval remains weak or irrelevant
+- the pipeline avoids overcommitting
+- the system returns a fallback-style grounded response instead of inventing policy content
 
-## Failed Retrieval Example
+## Why This Flow Fits The Project
 
-User query:
-
-```text
-What is the internal project codename for the new expansion?
-```
-
-Outcome:
-
-- chunks may be retrieved, but scores are weak or content is not meaningful
-- retrieval evaluation marks the evidence as insufficient
-- the system retries once with a broader query
-
-## Fallback Case
-
-If retrieval is still weak after retry, the system returns:
-
-```text
-I could not find this information in the uploaded documents.
-```
-
-This keeps the demo grounded and reduces unsupported answers.
+- It keeps the system architecture easy to follow.
+- It separates the frontend from the backend cleanly.
+- It preserves retrieval evidence, citations, and inspection details.
+- It stays grounded in the uploaded documents instead of acting like a generic chatbot.

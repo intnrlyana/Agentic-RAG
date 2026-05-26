@@ -1,4 +1,4 @@
-"""Document loading utilities for uploaded and local PDF sources."""
+"""Document loading utilities for uploaded and local PDF and DOCX sources."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 from typing import Any
 
+from docx import Document
 from pypdf import PdfReader
 
 
@@ -47,21 +48,64 @@ def extract_text_from_pdf_path(pdf_path: str | Path, source_type: str = "local")
         return []
 
 
-def load_pdfs_from_data_folder(data_dir: str = "data") -> list[PageRecord]:
-    """Load and extract text from all PDFs inside the local data folder."""
+def extract_text_from_docx_file(file: Any, source_type: str = "uploaded") -> list[PageRecord]:
+    """Extract document text from a DOCX-like file object."""
+    source_name = getattr(file, "name", "uploaded_document.docx")
+
+    try:
+        if hasattr(file, "seek"):
+            file.seek(0)
+        document = Document(file)
+    except Exception as exc:
+        logger.warning("Failed to read uploaded DOCX '%s': %s", source_name, exc)
+        return []
+
+    return _extract_pages_from_docx_document(
+        document,
+        source_name=source_name,
+        source_type=source_type,
+    )
+
+
+def extract_text_from_docx_path(docx_path: str | Path, source_type: str = "local") -> list[PageRecord]:
+    """Extract document text from a DOCX file stored on disk."""
+    path = Path(docx_path)
+
+    try:
+        document = Document(path)
+        return _extract_pages_from_docx_document(
+            document,
+            source_name=path.name,
+            source_type=source_type,
+        )
+    except Exception as exc:
+        logger.warning("Failed to read local DOCX '%s': %s", path, exc)
+        return []
+
+
+def load_supported_documents_from_data_folder(data_dir: str = "data") -> list[PageRecord]:
+    """Load and extract text from all supported documents inside the local data folder."""
     data_path = Path(data_dir)
     if not data_path.exists():
         logger.warning("Data directory does not exist: %s", data_path)
         return []
 
-    pdf_paths = sorted(path for path in data_path.iterdir() if path.is_file() and path.suffix.lower() == ".pdf")
-    if not pdf_paths:
-        logger.warning("No PDF files found in data directory: %s", data_path)
+    document_paths = sorted(
+        path
+        for path in data_path.iterdir()
+        if path.is_file() and path.suffix.lower() in {".pdf", ".docx"}
+    )
+    if not document_paths:
+        logger.warning("No supported documents found in data directory: %s", data_path)
         return []
 
     extracted_pages: list[PageRecord] = []
-    for pdf_path in pdf_paths:
-        extracted_pages.extend(extract_text_from_pdf_path(pdf_path, source_type="local"))
+    for document_path in document_paths:
+        suffix = document_path.suffix.lower()
+        if suffix == ".pdf":
+            extracted_pages.extend(extract_text_from_pdf_path(document_path, source_type="local"))
+        elif suffix == ".docx":
+            extracted_pages.extend(extract_text_from_docx_path(document_path, source_type="local"))
 
     return extracted_pages
 
@@ -79,7 +123,7 @@ def summarize_extraction(pages: list[PageRecord]) -> dict[str, Any]:
     source_types = sorted({page["source_type"] for page in pages}) if pages else []
 
     return {
-        "pdf_count": len(source_filenames),
+        "document_count": len(source_filenames),
         "total_pages_extracted": len(pages),
         "empty_or_skipped_pages": empty_pages,
         "source_filenames": source_filenames,
@@ -122,3 +166,26 @@ def _extract_pages_from_reader(
         logger.warning("PDF '%s' contains no readable pages.", source_name)
 
     return extracted_pages
+
+
+def _extract_pages_from_docx_document(
+    document: Document,
+    *,
+    source_name: str,
+    source_type: str,
+) -> list[PageRecord]:
+    """Normalize DOCX extraction into a single page-like record."""
+    paragraphs = [paragraph.text.strip() for paragraph in document.paragraphs if paragraph.text.strip()]
+    extracted_text = "\n\n".join(paragraphs)
+
+    page_record = {
+        "source": source_name,
+        "page_number": 1,
+        "text": extracted_text,
+        "source_type": source_type,
+    }
+
+    if not extracted_text:
+        logger.warning("DOCX '%s' contains no readable paragraphs.", source_name)
+
+    return [page_record]

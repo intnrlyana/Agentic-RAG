@@ -138,7 +138,7 @@ async def process_upload(
     uploaded_files: list[tuple[str, bytes]] = []
     for file in files:
         file_bytes = await file.read()
-        uploaded_files.append((file.filename or "uploaded_document.pdf", file_bytes))
+        uploaded_files.append((file.filename or "uploaded_document", file_bytes))
 
     artifacts = process_uploaded_documents(
         uploaded_files,
@@ -204,7 +204,7 @@ def _require_artifacts() -> PipelineArtifacts:
     if artifacts is None:
         raise HTTPException(
             status_code=409,
-            detail="No processed documents are loaded. Process local or uploaded PDFs first.",
+            detail="No processed documents are loaded. Process local or uploaded documents first.",
         )
     return artifacts
 

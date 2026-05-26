@@ -1,6 +1,6 @@
 # Agentic RAG Document Assistant
 
-A document question-answering system built for an AI engineering technical task. The app lets a user upload PDF documents, process them into a retrieval pipeline, and ask grounded questions through a chat interface with page-level citations.
+A document question-answering system that lets a user upload PDF or DOCX documents, process them into a retrieval pipeline, and ask grounded questions through a chat interface with page-level citations.
 
 The shipped experience is:
 
@@ -10,7 +10,7 @@ The shipped experience is:
 
 ## What It Does
 
-- Upload one or more PDF documents
+- Upload one or more PDF or DOCX documents
 - Extract and preprocess page text
 - Chunk content for retrieval
 - Build embeddings and a FAISS-based index
@@ -38,7 +38,7 @@ agentic-rag-assistant/
 ├── requirements.txt
 ├── .env.example
 ├── README.md
-├── data/                  # Sample PDFs or local test documents
+├── data/                  # Sample documents for local testing
 ├── docs/
 └── src/
     ├── agentic_rag.py
@@ -57,7 +57,7 @@ agentic-rag-assistant/
 
 ## System Flow
 
-1. Upload PDFs in the Streamlit app.
+1. Upload PDFs or DOCX files in the Streamlit app.
 2. Streamlit sends the files to the FastAPI backend.
 3. The backend extracts text, preprocesses pages, chunks content, and builds retrieval artifacts.
 4. When a user asks a question, the backend retrieves relevant chunks and generates a grounded answer.
@@ -66,7 +66,7 @@ agentic-rag-assistant/
 ## Main Features
 
 - Clean chat-style UI for the final demo
-- Multi-PDF upload support
+- Multi-document upload support for PDF and DOCX
 - Per-file enable/disable selection before processing
 - Retrieval-backed answers with citations
 - Sample starter questions for quick testing
@@ -149,7 +149,7 @@ The frontend will usually open at:
 ## How to Use
 
 1. Open the Streamlit app.
-2. Upload one or more PDF files in the sidebar.
+2. Upload one or more PDF or DOCX files in the sidebar.
 3. Optionally disable any uploaded file you do not want to include.
 4. Click `Process documents`.
 5. Ask questions in the chat input.
@@ -182,19 +182,19 @@ This project is structured as a small service-oriented RAG application:
 - `api.py` exposes document processing and question-answering endpoints
 - `src/` contains the retrieval and answer pipeline
 
-The primary submission path is the Streamlit chat app backed by FastAPI.
+The primary usage path is the Streamlit chat app backed by FastAPI.
 
 ## Known Limitations
 
-- Retrieval quality depends on PDF text extraction quality.
+- Retrieval quality depends on document text extraction quality.
 - Scanned PDFs without extractable text may perform poorly unless OCR is added.
 - The backend currently keeps processed artifacts in memory for the running session.
-- Large documents or many uploaded PDFs can increase processing and response time.
+- Large documents or many uploaded files can increase processing and response time.
 
-## Submission Tip
+## Usage Notes
 
-If you are pushing this for interview review, the easiest evaluation package is:
+The repository is easiest to evaluate through:
 
-- this GitHub repository
-- a short demo video or screenshots
-- an optional hosted version if it is stable
+- the Streamlit application
+- the FastAPI backend
+- the included documentation

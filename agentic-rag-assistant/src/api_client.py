@@ -33,7 +33,7 @@ def process_local_documents(
     chunk_overlap: int,
     embedding_model_name: str,
 ) -> dict[str, Any]:
-    """Ask the backend to process local PDFs from the data directory."""
+    """Ask the backend to process local supported documents from the data directory."""
     return _request_json(
         "POST",
         f"{_normalize_base_url(base_url)}/documents/process/local",
@@ -54,18 +54,24 @@ def process_uploaded_documents(
     chunk_overlap: int,
     embedding_model_name: str,
 ) -> dict[str, Any]:
-    """Upload PDFs to the backend and trigger processing."""
+    """Upload supported documents to the backend and trigger processing."""
     files = []
     for uploaded_file in uploaded_files:
         if hasattr(uploaded_file, "seek"):
             uploaded_file.seek(0)
+        suffix = uploaded_file.name.lower().rsplit(".", 1)[-1] if "." in uploaded_file.name else ""
+        content_type = (
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            if suffix == "docx"
+            else "application/pdf"
+        )
         files.append(
             (
                 "files",
                 (
                     uploaded_file.name,
                     uploaded_file.read(),
-                    "application/pdf",
+                    content_type,
                 ),
             )
         )

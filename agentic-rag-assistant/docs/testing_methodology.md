@@ -2,47 +2,97 @@
 
 ## Purpose
 
-This project uses a small golden-set testing section to show that the Agentic RAG workflow behaves sensibly across common scenarios.
+This project uses lightweight evaluation to show that the final document assistant behaves sensibly on realistic policy-style questions.
 
-The goal is not full benchmark-style automated grading. The goal is to make evaluation visible, explainable, and tied to explicit facts from the source PDF.
+The goal is not to claim benchmark-level testing. The goal is to make evaluation:
 
-## Test Case Table
+- easy to explain
+- tied to source documents
+- visible during a demo
+- grounded in citations and retrieved evidence
 
-| Test Name | Question | Expected Behavior |
-|---|---|---|
-| Annual Leave Entitlement | How many annual leave days does an employee get? | Return the entitlement table and cite page 13. |
-| Carry Forward Leave | Can annual leave be carried forward? | Return the 5-day rule, first-quarter deadline, and forfeiture rule. |
-| Public Holiday Entitlement | How many public holidays are employees entitled to? | Return the 15-day entitlement and cite the public holiday section. |
-| Working Hours Or Attendance Rules | Summarize the working hours or attendance rules. | Cover assigned hours, rest day, and no-pay-leave / attendance rules. |
-| Resignation Notice Period | What is the resignation notice period? | Return the 2-week and 4-week notice rules from page 20. |
-| Resignation Rules Summary | Summarize the resignation rules. | Cover notice, separation form, final wages, and clearance / exit interview. |
-| Leave And Resignation Summary | Summarize the leave and resignation rules. | Cover both leave and resignation topics with explicit rules. |
-| Unavailable Information Test | What is the moon allowance policy? | Trigger fallback instead of hallucinating. |
+## What Is Being Evaluated
 
-## What The Golden Check Measures
+The final system is evaluated as a document-grounded assistant with:
 
-- Expected-fact coverage:
-  - does the answer include the specific handbook facts we expect?
-- Citation-page coverage:
-  - do the returned citations include the expected source pages?
-- Retrieval hit:
-  - did the retrieved evidence contain the expected terms?
-- Fallback correctness:
-  - did the system abstain when the answer was unavailable?
+- document upload and processing
+- retrieval quality
+- answer grounding
+- citation behavior
+- fallback behavior when evidence is weak
+
+## Example Evaluation Scenarios
+
+Representative questions include:
+
+- `How many annual leave days does an employee get?`
+- `Can annual leave be carried forward?`
+- `How many public holidays are employees entitled to?`
+- `Summarize the working hours or attendance rules.`
+- `What is the resignation notice period?`
+- `Summarize the resignation rules.`
+- `Summarize the leave and resignation rules.`
+- `What is the moon allowance policy?`
+
+These scenarios cover:
+
+- direct factual retrieval
+- policy interpretation with caution
+- multi-topic summarization
+- unsupported-question fallback
+
+## What Review Looks For
+
+### 1. Grounded Answers
+
+- Does the answer stay close to the uploaded documents?
+- Does it avoid unsupported claims?
+- Does it use careful wording when the document is not fully explicit?
+
+### 2. Citation Quality
+
+- Do the citations point to the right source document?
+- Do the page references align with the retrieved evidence where page data exists?
+- Are the citations useful for manual verification?
+
+### 3. Retrieval Quality
+
+- Did the system retrieve relevant chunks?
+- Did the returned evidence contain the expected policy content?
+- Did the retrieval path avoid obviously irrelevant chunks?
+
+### 4. Fallback Behavior
+
+- If the answer is not supported by the documents, did the system avoid hallucinating?
+- Did the fallback behavior remain conservative and document-grounded?
+
+### 5. Usability In Demo
+
+- Can the answer path be followed quickly?
+- Are the supporting details visible enough to inspect?
+- Is latency acceptable for a technical-task demo?
 
 ## Manual Review Checklist
 
-- Does the answer match the retrieved evidence?
-- Do the citations point to the right document pages?
-- Does the answer cover the expected facts for that question?
-- Did fallback trigger when the information was unavailable?
-- Did the system avoid inventing unsupported details?
-- Was latency acceptable for a local demo?
+- Ask a direct fact question and confirm the answer against the document.
+- Ask a summary question and check whether the answer covers the main policy points.
+- Ask a question that is not supported by the uploaded documents.
+- Review the citations and retrieved chunk details.
+- Check whether the system stays grounded rather than sounding confident without evidence.
 
-## How To Explain Testing During An Interview
+## Evaluation Notes
 
-1. Show that each test uses the same live Agentic RAG pipeline as the normal app flow.
-2. Explain that evaluation uses a small golden fact set from the handbook rather than opaque LLM-as-judge scoring.
-3. Point out that expected facts, expected pages, citations, retries, and fallback behavior are all visible.
-4. Clarify that the scores are lightweight coverage checks, and final judgment is still manual review.
-5. Mention that this is appropriate for a demo because it is easy to inspect, defend, and tie back to the PDF.
+1. The same live pipeline is used for both demo interaction and evaluation-style checks.
+2. The emphasis is on document-grounded behavior, not black-box scoring.
+3. Reviewers can inspect retrieved evidence, citations, and answer details directly.
+4. This makes the system easier to defend technically because the evaluation is tied to visible artifacts.
+
+## Scope Note
+
+This evaluation approach is intentionally lightweight. It is suitable for:
+
+- a small engineering prototype
+- a walkthrough or engineering review
+- a reader who needs quick evidence that the system is grounded and inspectable
+
+It is not intended to replace large-scale benchmark testing or full production QA.

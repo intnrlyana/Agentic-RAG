@@ -22,7 +22,12 @@ from src.agentic_rag import (
 )
 from src.citations import attach_citations_to_response
 from src.chunking import chunk_pages, summarize_chunks
-from src.document_loader import extract_text_from_pdf_file, load_pdfs_from_data_folder, summarize_extraction
+from src.document_loader import (
+    extract_text_from_docx_file,
+    extract_text_from_pdf_file,
+    load_supported_documents_from_data_folder,
+    summarize_extraction,
+)
 from src.preprocessing import preprocess_pages, summarize_preprocessing
 from src.llamaindex_backend import (
     build_llamaindex_index,
@@ -227,7 +232,7 @@ def process_uploaded_documents(
     chunk_overlap: int = 180,
     embedding_model_name: str = "BAAI/bge-small-en-v1.5",
 ) -> PipelineArtifacts:
-    """Extract, preprocess, chunk, and index uploaded PDF bytes."""
+    """Extract, preprocess, chunk, and index uploaded PDF and DOCX bytes."""
     pages: list[dict[str, Any]] = []
     source_names: list[str] = []
 
@@ -235,7 +240,11 @@ def process_uploaded_documents(
         source_names.append(filename)
         file_obj = BytesIO(file_bytes)
         file_obj.name = filename
-        pages.extend(extract_text_from_pdf_file(file_obj, source_type="uploaded"))
+        suffix = Path(filename).suffix.lower()
+        if suffix == ".pdf":
+            pages.extend(extract_text_from_pdf_file(file_obj, source_type="uploaded"))
+        elif suffix == ".docx":
+            pages.extend(extract_text_from_docx_file(file_obj, source_type="uploaded"))
 
     return _build_pipeline_artifacts(
         pages,
@@ -253,10 +262,13 @@ def process_local_documents(
     chunk_overlap: int = 180,
     embedding_model_name: str = "BAAI/bge-small-en-v1.5",
 ) -> PipelineArtifacts:
-    """Extract, preprocess, chunk, and index all PDFs in the local data directory."""
+    """Extract, preprocess, chunk, and index all supported documents in the local data directory."""
     data_path = Path(data_dir)
-    source_names = sorted(path.name for path in data_path.glob("*.pdf"))
-    pages = load_pdfs_from_data_folder(data_dir=data_dir)
+    source_names = sorted(
+        path.name for path in data_path.iterdir()
+        if path.is_file() and path.suffix.lower() in {".pdf", ".docx"}
+    ) if data_path.exists() else []
+    pages = load_supported_documents_from_data_folder(data_dir=data_dir)
     return _build_pipeline_artifacts(
         pages,
         source_names=source_names,
